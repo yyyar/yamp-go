@@ -5,6 +5,7 @@
 package yamp
 
 import (
+	"github.com/yyyar/yamp-go/api"
 	"github.com/yyyar/yamp-go/format"
 	"io"
 	"log"
@@ -38,10 +39,11 @@ func TestReqRes(t *testing.T) {
 
 		client := NewConnection(&MockConnection{r1, w2}, &format.JsonBodyFormat{})
 
-		client.OnRequest("sum", func(req *Request, res *Response) {
+		client.OnRequest("sum", func(req *api.Request, res *api.Response) {
 
 			var body []int
-			req.ReadTo(&body)
+			//req.ReadTo(&body)
+			(&format.JsonBodyFormat{}).Parse(req.RawBody(), &body)
 
 			log.Println(res.RequestId(), "OnRequest   'sum': ", body)
 
@@ -57,7 +59,7 @@ func TestReqRes(t *testing.T) {
 
 		for i := 0; i < N; i++ {
 
-			server.SendRequest("sum", []int{i, i}, func(res *Response) {
+			server.SendRequest("sum", []int{i, i}, func(res *api.Response) {
 
 				var body int
 				res.ReadTo(&body)

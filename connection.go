@@ -6,20 +6,13 @@ package yamp
 
 import (
 	"github.com/satori/go.uuid"
+	"github.com/yyyar/yamp-go/api"
+	"github.com/yyyar/yamp-go/dealers"
 	"github.com/yyyar/yamp-go/format"
 	"github.com/yyyar/yamp-go/parser"
 	"github.com/yyyar/yamp-go/transport"
 	"log"
 )
-
-// EventHandler
-type EventHandler func(*Event)
-
-// RequestHandler
-type RequestHandler func(*Request, *Response)
-
-// ResponseHandler
-type ResponseHandler func(*Response)
 
 // Connection is Yamp connection abstraction supports
 // events sending/handling and request/response
@@ -38,9 +31,9 @@ type Connection struct {
 	// Channel for pushing frames that will be written to other party
 	framesOut chan (parser.Frame)
 
-	*EventDealer
-	*RequestDealer
-	*ResponseDealer
+	*dealers.EventDealer
+	*dealers.RequestDealer
+	*dealers.ResponseDealer
 }
 
 //
@@ -59,9 +52,9 @@ func NewConnection(conn transport.Connection, bodyFormat format.BodyFormat) *Con
 
 		framesOut: out,
 
-		EventDealer:    NewEventDealer(bodyFormat),
-		RequestDealer:  NewRequestDealer(bodyFormat, out),
-		ResponseDealer: NewResponseDealer(bodyFormat),
+		EventDealer:    dealers.NewEventDealer(bodyFormat),
+		RequestDealer:  dealers.NewRequestDealer(bodyFormat, out),
+		ResponseDealer: dealers.NewResponseDealer(bodyFormat),
 	}
 
 	go connection.readLoop()
@@ -106,11 +99,11 @@ func (this *Connection) readLoop() {
 			// Dispatch new frame
 			switch frame.GetType() {
 			case parser.EVENT:
-				this.EventDealer.in <- *(frame).(*parser.Event)
+				this.EventDealer.In <- *(frame).(*parser.Event)
 			case parser.RESPONSE:
-				this.ResponseDealer.in <- *(frame).(*parser.Response)
+				this.ResponseDealer.In <- *(frame).(*parser.Response)
 			case parser.REQUEST:
-				this.RequestDealer.in <- *(frame).(*parser.Request)
+				this.RequestDealer.In <- *(frame).(*parser.Request)
 			default:
 				log.Println("Unhandled frame", frame.GetType(), frame)
 
@@ -146,7 +139,7 @@ func (this *Connection) SendEvent(uri string, body interface{}) {
 //
 // SendRequest
 //
-func (this *Connection) SendRequest(uri string, body interface{}, handler ResponseHandler) {
+func (this *Connection) SendRequest(uri string, body interface{}, handler api.ResponseHandler) {
 
 	uid := uuid.NewV1()
 	b, _ := this.bodyFormat.Serialize(body)

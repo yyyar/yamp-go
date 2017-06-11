@@ -5,6 +5,7 @@
 package yamp
 
 import (
+	"github.com/yyyar/yamp-go/api"
 	"github.com/yyyar/yamp-go/format"
 	"log"
 	"net"
@@ -42,7 +43,7 @@ func TestTcp(t *testing.T) {
 			}
 
 			conn := NewConnection(c, &format.JsonBodyFormat{})
-			conn.OnRequest("echo", func(req *Request, res *Response) {
+			conn.OnRequest("echo", func(req *api.Request, res *api.Response) {
 
 				var body string
 				req.ReadTo(&body)
@@ -64,7 +65,7 @@ func TestTcp(t *testing.T) {
 		}
 
 		conn := NewConnection(c, &format.JsonBodyFormat{})
-		conn.SendRequest("echo", "hello world!", func(res *Response) {
+		conn.SendRequest("echo", "hello world!", func(res *api.Response) {
 
 			var body string
 			res.ReadTo(&body)

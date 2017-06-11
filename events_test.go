@@ -5,6 +5,7 @@
 package yamp
 
 import (
+	"github.com/yyyar/yamp-go/api"
 	"github.com/yyyar/yamp-go/format"
 	"io"
 	"log"
@@ -26,7 +27,7 @@ func TestEvents(t *testing.T) {
 	client := NewConnection(&MockConnection{r1, w2}, &format.JsonBodyFormat{})
 	server := NewConnection(&MockConnection{r2, w1}, &format.JsonBodyFormat{})
 
-	client.OnEvent("foo", func(event *Event) {
+	client.OnEvent("foo", func(event *api.Event) {
 
 		var body struct{ Msg string }
 		event.ReadTo(&body)
