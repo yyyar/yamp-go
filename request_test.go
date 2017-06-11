@@ -36,7 +36,7 @@ func TestReqRes(t *testing.T) {
 	// Run responder
 	go (func() {
 
-		client := NewConnection(&MockConnection{r1, w2}, &format.JsonBodyFormat{})
+		client, _ := NewConnection(true, &MockConnection{r1, w2}, &format.JsonBodyFormat{})
 
 		client.OnRequest("sum", func(req *api.Request, res *api.Response) {
 
@@ -54,7 +54,7 @@ func TestReqRes(t *testing.T) {
 	// Run requester
 	go (func() {
 
-		server := NewConnection(&MockConnection{r2, w1}, &format.JsonBodyFormat{})
+		server, _ := NewConnection(false, &MockConnection{r2, w1}, &format.JsonBodyFormat{})
 
 		for i := 0; i < N; i++ {
 

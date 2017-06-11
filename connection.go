@@ -5,6 +5,7 @@
 package yamp
 
 import (
+	"errors"
 	"github.com/satori/go.uuid"
 	"github.com/yyyar/yamp-go/api"
 	"github.com/yyyar/yamp-go/dealers"
@@ -14,10 +15,15 @@ import (
 	"log"
 )
 
+const (
+	YAMP_VERSION = 0x01
+)
+
 // Connection is Yamp connection abstraction supports
 // events sending/handling and request/response
 // processing
 type Connection struct {
+	isClient bool
 
 	// Transport connection adapter
 	conn transport.Connection
@@ -40,12 +46,13 @@ type Connection struct {
 // NewConnection Creates new instance of Connection wrapping
 // transport.Connection and immediately starting read/write loop
 //
-func NewConnection(conn transport.Connection, bodyFormat format.BodyFormat) *Connection {
+func NewConnection(isClient bool, conn transport.Connection, bodyFormat format.BodyFormat) (*Connection, error) {
 
 	out := make(chan parser.Frame)
 
 	connection := &Connection{
 
+		isClient:   isClient,
 		conn:       conn,
 		parser:     parser.NewParser(conn),
 		bodyFormat: bodyFormat,
@@ -57,10 +64,96 @@ func NewConnection(conn transport.Connection, bodyFormat format.BodyFormat) *Con
 		ResponseDealer: dealers.NewResponseDealer(bodyFormat),
 	}
 
-	go connection.readLoop()
-	go connection.writeLoop()
+	// Try handshake
+	if err := connection.handshake(); err != nil {
+		return nil, err
+	}
 
-	return connection
+	return connection, nil
+}
+
+//
+// Perform initial system.identify
+//
+func (this *Connection) handshake() error {
+
+	if this.isClient {
+		if err := this.handshakeClient(); err != nil {
+			return err
+		}
+	} else {
+		if err := this.handshakeServer(); err != nil {
+			return err
+		}
+	}
+
+	go this.readLoop()
+	go this.writeLoop()
+
+	return nil
+}
+
+//
+// Initiate client-side handshake with server
+//
+func (this *Connection) handshakeClient() error {
+
+	// Send system.identify
+
+	(&parser.SystemIdentify{
+		Version: YAMP_VERSION,
+	}).Serialize(this.conn)
+
+	// Get response
+
+	frame, _ := <-this.parser.Frames
+
+	// If got system.identify back, then we're ok
+	if frame.GetType() == parser.SYSTEM_IDENTIFY {
+		return nil
+	}
+
+	// Something bad happened
+	if frame.GetType() == parser.SYSTEM_CLOSE {
+		log.Println(frame)
+		return errors.New(frame.(*parser.SystemClose).Reason)
+	}
+
+	return errors.New("Unexpected event")
+}
+
+//
+// Handle server party handshake
+//
+func (this *Connection) handshakeServer() error {
+
+	// Wait for client to send system.identify
+
+	frame, ok := <-this.parser.Frames
+	if !ok {
+		<-this.parser.Error
+		return errors.New("Nothing")
+	}
+
+	// If client sent something else, close connection
+
+	if frame.GetType() != parser.SYSTEM_IDENTIFY {
+		this.conn.Close()
+		return errors.New("Unexpected frame")
+	}
+
+	// Check versions, and if we're satisfied
+	// respond with the same system.identify
+
+	identify := frame.(*parser.SystemIdentify)
+	if identify.Version != YAMP_VERSION {
+		this.conn.Close()
+		return errors.New("Version not supported")
+	}
+
+	frame.Serialize(this.conn)
+
+	return nil
 }
 
 //
@@ -69,6 +162,7 @@ func NewConnection(conn transport.Connection, bodyFormat format.BodyFormat) *Con
 func (this *Connection) writeLoop() {
 
 	for {
+
 		frame, ok := <-this.framesOut
 
 		if !ok {

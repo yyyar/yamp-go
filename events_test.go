@@ -23,17 +23,29 @@ func TestEvents(t *testing.T) {
 	r1, w1 := io.Pipe()
 	r2, w2 := io.Pipe()
 
-	client := NewConnection(&MockConnection{r1, w2}, &format.JsonBodyFormat{})
-	server := NewConnection(&MockConnection{r2, w1}, &format.JsonBodyFormat{})
+	go (func() {
+		client, err := NewConnection(true, &MockConnection{r1, w2}, &format.JsonBodyFormat{})
 
-	client.OnEvent("foo", func(event *api.Event) {
+		if err != nil {
+			t.Fatal(err)
+		}
 
-		var body struct{ Msg string }
-		event.ReadTo(&body)
+		client.OnEvent("foo", func(event *api.Event) {
 
-		t.Log("OnEvent 'foo'", body)
-		wg.Done()
-	})
+			var body struct{ Msg string }
+			event.ReadTo(&body)
+
+			t.Log("OnEvent 'foo'", body)
+			wg.Done()
+		})
+
+	})()
+
+	server, err := NewConnection(false, &MockConnection{r2, w1}, &format.JsonBodyFormat{})
+
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	t.Log("SendEvent 'foo'")
 	server.SendEvent("foo", struct{ Msg string }{"Hello"})

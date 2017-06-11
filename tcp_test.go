@@ -41,7 +41,7 @@ func TestTcp(t *testing.T) {
 				t.Log(err)
 			}
 
-			conn := NewConnection(c, &format.JsonBodyFormat{})
+			conn, _ := NewConnection(false, c, &format.JsonBodyFormat{})
 			conn.OnRequest("echo", func(req *api.Request, res *api.Response) {
 
 				var body string
@@ -63,7 +63,7 @@ func TestTcp(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		conn := NewConnection(c, &format.JsonBodyFormat{})
+		conn, _ := NewConnection(true, c, &format.JsonBodyFormat{})
 		conn.SendRequest("echo", "hello world!", func(res *api.Response) {
 
 			var body string
