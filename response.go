@@ -8,7 +8,80 @@ import (
 	"github.com/satori/go.uuid"
 	"github.com/yyyar/yamp-go/format"
 	"github.com/yyyar/yamp-go/parser"
+	"log"
+	"sync"
 )
+
+//
+// ResponseDealer
+//
+type ResponseDealer struct {
+	sync.RWMutex
+
+	bodyFormat format.BodyFormat
+	in         chan parser.Response
+	handlers   map[uuid.UUID]ResponseHandler
+}
+
+//
+// NewResponseDealer
+//
+func NewResponseDealer(bodyFormat format.BodyFormat) *ResponseDealer {
+
+	p := &ResponseDealer{
+		bodyFormat: bodyFormat,
+		in:         make(chan parser.Response),
+		handlers:   make(map[uuid.UUID]ResponseHandler),
+	}
+
+	go p.Loop()
+	return p
+}
+
+//
+// OnResponse
+//
+func (p *ResponseDealer) OnResponse(uid uuid.UUID, handler ResponseHandler) error {
+
+	p.Lock()
+	defer p.Unlock()
+
+	p.handlers[uid] = handler
+
+	return nil
+
+}
+
+//
+// Loop
+//
+func (p *ResponseDealer) Loop() {
+
+	for {
+
+		response, ok := <-p.in
+		if !ok {
+			return
+		}
+
+		p.Lock()
+
+		handler, ok := p.handlers[response.RequestUid]
+
+		if !ok {
+			log.Println("No handlers for response uri ", response.RequestUid)
+			return
+		}
+
+		delete(p.handlers, response.RequestUid)
+
+		p.Unlock()
+
+		go handler(&Response{p.bodyFormat, nil, nil, &response})
+	}
+}
+
+// ---------------------------------------------------------------------
 
 //
 // Response represents response for a request
@@ -26,6 +99,13 @@ type Response struct {
 
 	// Response frame
 	frame *parser.Response
+}
+
+//
+// Id returns unique identifier of response
+//
+func (r *Response) Id() string {
+	return uuid.UUID(r.frame.Uid).String()
 }
 
 //

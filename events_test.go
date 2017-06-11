@@ -18,7 +18,7 @@ import (
 func TestEvents(t *testing.T) {
 
 	var wg sync.WaitGroup
-	wg.Add(1)
+	wg.Add(2)
 
 	r1, w1 := io.Pipe()
 	r2, w2 := io.Pipe()
@@ -37,6 +37,7 @@ func TestEvents(t *testing.T) {
 
 	log.Println("SendEvent 'foo'")
 	server.SendEvent("foo", struct{ Msg string }{"Hello"})
+	server.SendEvent("foo", struct{ Msg string }{"World"})
 
 	wg.Wait()
 }

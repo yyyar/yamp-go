@@ -5,10 +5,94 @@
 package yamp
 
 import (
+	"errors"
 	"github.com/satori/go.uuid"
 	"github.com/yyyar/yamp-go/format"
 	"github.com/yyyar/yamp-go/parser"
+	"log"
+	"sync"
 )
+
+//
+// RequestDealer
+//
+type RequestDealer struct {
+	sync.RWMutex
+
+	bodyFormat format.BodyFormat
+	in         chan parser.Request
+	out        chan parser.Frame
+	handlers   map[string]RequestHandler
+}
+
+//
+// NewRequestDealer
+//
+func NewRequestDealer(bodyFormat format.BodyFormat, out chan parser.Frame) *RequestDealer {
+
+	p := &RequestDealer{
+		bodyFormat: bodyFormat,
+		in:         make(chan parser.Request),
+		out:        out,
+		handlers:   make(map[string]RequestHandler),
+	}
+
+	go p.Loop()
+	return p
+}
+
+//
+// OnRequest
+//
+func (p *RequestDealer) OnRequest(uri string, handler RequestHandler) error {
+
+	p.Lock()
+	defer p.Unlock()
+
+	if _, ok := p.handlers[uri]; ok {
+		return errors.New("Request handler on uri " + uri + " already exists")
+	}
+
+	p.handlers[uri] = handler
+
+	return nil
+
+}
+
+//
+// Loop()
+//
+func (p *RequestDealer) Loop() {
+
+	for {
+
+		request, ok := <-p.in
+		if !ok {
+			return
+		}
+
+		p.RLock()
+		handler, ok := p.handlers[request.Uri]
+		p.RUnlock()
+
+		if !ok {
+			log.Println("No handlers for request uri " + request.Uri)
+			return
+		}
+
+		go handler(&Request{
+			p.bodyFormat,
+			request,
+		}, &Response{
+			p.bodyFormat,
+			p.out,
+			&request,
+			nil,
+		})
+	}
+}
+
+// --------------------------------------------------------------------------
 
 //
 // Request represents request that came to request handler

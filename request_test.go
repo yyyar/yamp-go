@@ -25,7 +25,7 @@ type MockConnection struct {
 //
 func TestReqRes(t *testing.T) {
 
-	const N = 2
+	const N = 10
 
 	var wg sync.WaitGroup
 	wg.Add(N)
@@ -65,6 +65,7 @@ func TestReqRes(t *testing.T) {
 				log.Println(res.RequestId(), "OnResponse  'sum': ", body)
 				wg.Done()
 			})
+
 		}
 
 	})()
