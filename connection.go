@@ -5,18 +5,30 @@
 package yamp
 
 import (
+	"errors"
 	"github.com/satori/go.uuid"
 	"github.com/yyyar/yamp-go/format"
 	"github.com/yyyar/yamp-go/parser"
 	"github.com/yyyar/yamp-go/transport"
 	"log"
-	"reflect"
 )
 
 //
-// Callback for event and reqest/response handlers
+// EventHandler represents function for receiving event
 //
-type CallbackFunc interface{}
+type EventHandler func(*Event)
+
+//
+// RequestHandler represents function type for handling
+// requests and writing responses
+//
+type RequestHandler func(*Request, *Response)
+
+//
+// ResponseHandler represents function for receiving
+// response of previously sent request
+//
+type ResponseHandler func(*Response)
 
 //
 // Connection is Yamp connection abstraction supports
@@ -33,7 +45,7 @@ type Connection struct {
 	conn transport.Connection
 
 	//
-	// User messages body format parser/serializer
+	// User frames body format parser/serializer
 	//
 	bodyFormat format.BodyFormat
 
@@ -45,7 +57,7 @@ type Connection struct {
 	//
 	// Channel for pushing frames that will be written to other party
 	//
-	messagesOut chan (parser.Frame)
+	framesOut chan (parser.Frame)
 
 	//
 	// --------------- user callbacks storage ---------------
@@ -54,17 +66,17 @@ type Connection struct {
 	//
 	// User callbacks for events
 	//
-	eventHandlers map[string][]CallbackFunc
+	eventHandlers map[string][]EventHandler
 
 	//
 	// User callbacks for responses
 	//
-	responseHandlers map[uuid.UUID]CallbackFunc
+	responseHandlers map[uuid.UUID]ResponseHandler
 
 	//
 	// User callbacks for requests
 	//
-	requestHandlers map[string]CallbackFunc
+	requestHandlers map[string]RequestHandler
 }
 
 //
@@ -79,11 +91,11 @@ func NewConnection(conn transport.Connection, bodyFormat format.BodyFormat) *Con
 		bodyFormat: bodyFormat,
 		parser:     parser.NewParser(conn),
 
-		messagesOut: make(chan parser.Frame),
+		framesOut: make(chan parser.Frame),
 
-		eventHandlers:    make(map[string][]CallbackFunc),
-		responseHandlers: make(map[uuid.UUID]CallbackFunc),
-		requestHandlers:  make(map[string]CallbackFunc),
+		eventHandlers:    make(map[string][]EventHandler),
+		responseHandlers: make(map[uuid.UUID]ResponseHandler),
+		requestHandlers:  make(map[string]RequestHandler),
 	}
 
 	go connection.loop()
@@ -93,7 +105,7 @@ func NewConnection(conn transport.Connection, bodyFormat format.BodyFormat) *Con
 
 //
 // loop is parseing / serializing loop. It works
-// until it gets parser.Messages channel close event,
+// until it gets parser.Frames channel close event,
 // i.e. while underlying reader is live
 //
 func (this *Connection) loop() {
@@ -102,11 +114,11 @@ func (this *Connection) loop() {
 		select {
 
 		// Got new frame for sending
-		case frame := <-this.messagesOut:
+		case frame := <-this.framesOut:
 			frame.Serialize(this.conn)
 
 		// Got new parsed frame
-		case frame, ok := <-this.parser.Messages:
+		case frame, ok := <-this.parser.Frames:
 
 			if !ok {
 				log.Println(<-this.parser.Error)
@@ -135,26 +147,21 @@ func (this *Connection) loop() {
 // Handles event frame. Iterates over all event uri subscribers
 // and executes callback in gourutines
 //
-func (this *Connection) handleEvent(message parser.Event) {
+func (this *Connection) handleEvent(event parser.Event) {
 
-	handlers, ok := this.eventHandlers[message.Uri]
+	handlers, ok := this.eventHandlers[event.Uri]
 
 	if !ok {
-		log.Println("No handlers for event uri " + message.Uri)
+		log.Println("No handlers for event uri " + event.Uri)
 		return
 	}
 
 	for _, handler := range handlers {
 
-		// infer callback first parameter type to cast
-		// message body properly
-
-		handlerType := reflect.TypeOf(handler)
-		handlerArg := reflect.New(handlerType.In(0)).Interface()
-
-		this.bodyFormat.Parse(message.Body, handlerArg)
-
-		go reflect.ValueOf(handler).Call([]reflect.Value{reflect.Indirect(reflect.ValueOf(handlerArg))})
+		go handler(&Event{
+			this.bodyFormat,
+			event,
+		})
 	}
 
 }
@@ -162,66 +169,41 @@ func (this *Connection) handleEvent(message parser.Event) {
 //
 // Handles request frame
 //
-func (this *Connection) handleRequest(message parser.Request) {
+func (this *Connection) handleRequest(request parser.Request) {
 
-	handler, ok := this.requestHandlers[message.Uri]
+	handler, ok := this.requestHandlers[request.Uri]
 
 	if !ok {
-		log.Println("No handlers for request", message.Uri)
+		log.Println("No handlers for request", request.Uri)
 		return
 	}
 
-	// Response sender function
-	// Made in generic way to fit any params signature
-	responseSender := func(in []reflect.Value) []reflect.Value {
-		resp := in[0].Interface()
-		b, _ := this.bodyFormat.Serialize(resp)
-		r := parser.Response{
-			UserHeader: parser.UserHeader{
-				Uid: uuid.NewV1(),
-				Uri: message.Uri,
-			},
-			RequestUid: message.Uid,
-			Type:       parser.RESPONSE_DONE,
-			UserBody: parser.UserBody{
-				Body: b,
-			},
-		}
-		this.messagesOut <- &r
-		return nil
-	}
-
-	handlerType := reflect.TypeOf(handler)
-
-	responseSenderArg := reflect.New(handlerType.In(1))
-	responseSenderWrap := reflect.MakeFunc(reflect.Indirect(responseSenderArg).Type(), responseSender)
-
-	handlerArg := reflect.New(handlerType.In(0)).Interface()
-	this.bodyFormat.Parse(message.Body, handlerArg)
-
-	go reflect.ValueOf(handler).Call([]reflect.Value{reflect.Indirect(reflect.ValueOf(handlerArg)), responseSenderWrap})
+	go handler(&Request{
+		this.bodyFormat,
+		request,
+	}, &Response{
+		this.bodyFormat,
+		this.framesOut,
+		&request,
+		nil,
+	})
 }
 
 //
 // Handle response for previously sent request.
 //
-func (this *Connection) handleResponse(message parser.Response) {
+func (this *Connection) handleResponse(response parser.Response) {
 
-	handler, ok := this.responseHandlers[message.RequestUid]
+	handler, ok := this.responseHandlers[response.RequestUid]
 
 	if !ok {
-		log.Println("No handlers for response with request uid ", message.RequestUid)
+		log.Println("No handlers for response with request uid ", response.RequestUid)
 		return
 	}
 
-	delete(this.responseHandlers, message.RequestUid)
+	delete(this.responseHandlers, response.RequestUid)
 
-	handlerType := reflect.TypeOf(handler)
-	handlerArg := reflect.New(handlerType.In(0)).Interface()
-
-	this.bodyFormat.Parse(message.Body, handlerArg)
-
-	go reflect.ValueOf(handler).Call([]reflect.Value{reflect.Indirect(reflect.ValueOf(handlerArg))})
+	go handler(&Response{this.bodyFormat, nil, nil, &response})
 }
 
 /*                                                                                      */
@@ -249,7 +231,7 @@ func (this *Connection) CloseRedirect(uri string) {
 
 //
 // Sends event with uri and body. Body would be serialized.
-// Blocks until message is sent
+// Blocks until event is sent
 //
 func (this *Connection) SendEvent(uri string, body interface{}) {
 
@@ -265,16 +247,16 @@ func (this *Connection) SendEvent(uri string, body interface{}) {
 		},
 	}
 
-	this.messagesOut <- &event
+	this.framesOut <- &event
 
 }
 
 //
 // Subscribe for and event. Function will call callback with the event once it receive it
 //
-func (this *Connection) OnEvent(uri string, f interface{}) {
+func (this *Connection) OnEvent(uri string, f EventHandler) {
 	if _, ok := this.eventHandlers[uri]; !ok {
-		this.eventHandlers[uri] = []CallbackFunc{}
+		this.eventHandlers[uri] = []EventHandler{}
 	}
 	this.eventHandlers[uri] = append(this.eventHandlers[uri], f)
 }
@@ -284,7 +266,7 @@ func (this *Connection) OnEvent(uri string, f interface{}) {
 // once implementation get it.
 // Blocks until request is sent
 //
-func (this *Connection) SendRequest(uri string, body interface{}, f interface{}) {
+func (this *Connection) SendRequest(uri string, body interface{}, f ResponseHandler) {
 
 	uid := uuid.NewV1()
 
@@ -303,7 +285,7 @@ func (this *Connection) SendRequest(uri string, body interface{}, f interface{})
 
 	this.responseHandlers[uid] = f
 
-	this.messagesOut <- &request
+	this.framesOut <- &request
 
 }
 
@@ -311,6 +293,12 @@ func (this *Connection) SendRequest(uri string, body interface{}, f interface{})
 // Subscribes for request. Callback with request info would be called when request will come in.
 // Callback should then call response in order to respond to a request
 //
-func (this *Connection) OnRequest(uri string, f CallbackFunc) {
-	this.requestHandlers[uri] = f
+func (this *Connection) OnRequest(uri string, handler RequestHandler) error {
+
+	if _, ok := this.requestHandlers[uri]; ok {
+		return errors.New("Request handler on uri " + uri + " already exists")
+	}
+
+	this.requestHandlers[uri] = handler
+	return nil
 }

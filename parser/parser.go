@@ -30,12 +30,12 @@ func init() {
 }
 
 //
-// Frame type represents specific message
+// Frame type represents specific frame
 //
 type FrameType uint8
 
 //
-// Frame is transferred message with concrete type
+// Frame is transferred frame with concrete type
 //
 type Frame interface {
 
@@ -57,8 +57,8 @@ type Parser struct {
 	// Reader to read bytes to parse from
 	reader io.Reader
 
-	// Channel to push parsed messages
-	Messages chan Frame
+	// Channel to push parsed frames
+	Frames chan Frame
 
 	// Error to push reason of parser stop
 	Error chan error
@@ -70,9 +70,9 @@ type Parser struct {
 func NewParser(reader io.Reader) *Parser {
 
 	parser := Parser{
-		reader:   reader,
-		Messages: make(chan Frame),
-		Error:    make(chan error, 1),
+		reader: reader,
+		Frames: make(chan Frame),
+		Error:  make(chan error, 1),
 	}
 
 	go parser.loop()
@@ -88,17 +88,17 @@ func (this *Parser) loop() {
 		frame, err := this.nextFrame()
 
 		if err != nil {
-			close(this.Messages)
+			close(this.Frames)
 			this.Error <- err
 			return
 		}
 
-		this.Messages <- frame
+		this.Frames <- frame
 	}
 }
 
 //
-// Parse next message
+// Parse next frame
 //
 func (this *Parser) nextFrame() (Frame, error) {
 
