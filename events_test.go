@@ -8,7 +8,6 @@ import (
 	"github.com/yyyar/yamp-go/api"
 	"github.com/yyyar/yamp-go/format"
 	"io"
-	"log"
 	"sync"
 	"testing"
 )
@@ -32,11 +31,11 @@ func TestEvents(t *testing.T) {
 		var body struct{ Msg string }
 		event.ReadTo(&body)
 
-		log.Println("OnEvent 'foo'", body)
+		t.Log("OnEvent 'foo'", body)
 		wg.Done()
 	})
 
-	log.Println("SendEvent 'foo'")
+	t.Log("SendEvent 'foo'")
 	server.SendEvent("foo", struct{ Msg string }{"Hello"})
 	server.SendEvent("foo", struct{ Msg string }{"World"})
 

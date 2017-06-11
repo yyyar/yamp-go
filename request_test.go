@@ -8,7 +8,6 @@ import (
 	"github.com/yyyar/yamp-go/api"
 	"github.com/yyyar/yamp-go/format"
 	"io"
-	"log"
 	"sync"
 	"testing"
 )
@@ -45,7 +44,7 @@ func TestReqRes(t *testing.T) {
 			//req.ReadTo(&body)
 			(&format.JsonBodyFormat{}).Parse(req.RawBody(), &body)
 
-			log.Println(res.RequestId(), "OnRequest   'sum': ", body)
+			t.Log(res.RequestId(), "OnRequest   'sum': ", body)
 
 			res.Done(body[0] + body[1])
 		})
@@ -64,7 +63,7 @@ func TestReqRes(t *testing.T) {
 				var body int
 				res.ReadTo(&body)
 
-				log.Println(res.RequestId(), "OnResponse  'sum': ", body)
+				t.Log(res.RequestId(), "OnResponse  'sum': ", body)
 				wg.Done()
 			})
 

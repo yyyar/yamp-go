@@ -4,4 +4,4 @@ go:
 env:
     - GOMAXPROCS=4
 script:
-    - go test -v .
+    - go test -v ./...
