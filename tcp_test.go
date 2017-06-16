@@ -45,7 +45,7 @@ func TestTcp(t *testing.T) {
 			conn.OnRequest("echo", func(req *api.Request, res *api.Response) {
 
 				var body string
-				req.ReadTo(&body)
+				req.Read(&body)
 
 				t.Log(req.Id(), "OnRequest\t'echo': ", body)
 				res.Done(body)
@@ -67,7 +67,7 @@ func TestTcp(t *testing.T) {
 		conn.SendRequest("echo", "hello world!", func(res *api.Response) {
 
 			var body string
-			res.ReadTo(&body)
+			res.Read(&body)
 
 			t.Log(res.RequestId(), "OnResponse\t'echo': ", body)
 			wg.Done()

@@ -55,9 +55,9 @@ func (r *Response) RequestId() string {
 }
 
 //
-// ReadTo reads (parses) response data into object
+// Read reads (parses) response data into object
 //
-func (r *Response) ReadTo(to interface{}) {
+func (r *Response) Read(to interface{}) {
 	r.BodyFormat.Parse(r.Frame.Body, to)
 }
 

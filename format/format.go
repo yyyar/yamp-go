@@ -55,4 +55,9 @@ type BodyFormat interface {
 	// Parse byte array to object
 	//
 	Parse([]byte, interface{}) error
+
+	//
+	// Get format type as string
+	//
+	GetType() string
 }

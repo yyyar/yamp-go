@@ -41,7 +41,6 @@ func TestReqRes(t *testing.T) {
 		client.OnRequest("sum", func(req *api.Request, res *api.Response) {
 
 			var body []int
-			//req.ReadTo(&body)
 			(&format.JsonBodyFormat{}).Parse(req.RawBody(), &body)
 
 			t.Log(res.RequestId(), "OnRequest   'sum': ", body)
@@ -61,7 +60,7 @@ func TestReqRes(t *testing.T) {
 			server.SendRequest("sum", []int{i, i}, func(res *api.Response) {
 
 				var body int
-				res.ReadTo(&body)
+				res.Read(&body)
 
 				t.Log(res.RequestId(), "OnResponse  'sum': ", body)
 				wg.Done()

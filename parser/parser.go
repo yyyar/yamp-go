@@ -18,7 +18,7 @@ var framesFactory = map[FrameType](func() Frame){}
 // Initialize module: add frames factory functions
 //
 func init() {
-	framesFactory[SYSTEM_IDENTIFY] = (func() Frame { return &SystemIdentify{} })
+	framesFactory[SYSTEM_HANDSHAKE] = (func() Frame { return &SystemHandshake{} })
 	framesFactory[SYSTEM_PING] = (func() Frame { return &SystemPing{} })
 	framesFactory[SYSTEM_PONG] = (func() Frame { return &SystemPong{} })
 	framesFactory[SYSTEM_CLOSE] = (func() Frame { return &SystemClose{} })

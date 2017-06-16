@@ -35,9 +35,9 @@ func (e *Event) Id() string {
 }
 
 //
-// ReadTo reads (parses) event body to object
+// Read reads (parses) event body to object
 //
-func (e *Event) ReadTo(to interface{}) {
+func (e *Event) Read(to interface{}) {
 	e.BodyFormat.Parse(e.Frame.Body, to)
 }
 

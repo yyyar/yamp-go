@@ -14,6 +14,13 @@ import (
 type JsonBodyFormat struct{}
 
 //
+// Returns type
+//
+func (this *JsonBodyFormat) GetType() string {
+	return "json"
+}
+
+//
 // Serialize JSON
 //
 func (this *JsonBodyFormat) Serialize(obj interface{}) ([]byte, error) {

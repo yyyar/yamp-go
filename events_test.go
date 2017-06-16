@@ -33,7 +33,7 @@ func TestEvents(t *testing.T) {
 		client.OnEvent("foo", func(event *api.Event) {
 
 			var body struct{ Msg string }
-			event.ReadTo(&body)
+			event.Read(&body)
 
 			t.Log("OnEvent 'foo'", body)
 			wg.Done()

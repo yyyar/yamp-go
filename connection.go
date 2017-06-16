@@ -66,6 +66,7 @@ func NewConnection(isClient bool, conn transport.Connection, bodyFormat format.B
 
 	// Try handshake
 	if err := connection.handshake(); err != nil {
+
 		return nil, err
 	}
 
@@ -73,7 +74,7 @@ func NewConnection(isClient bool, conn transport.Connection, bodyFormat format.B
 }
 
 //
-// Perform initial system.identify
+// Perform initial system.handshake
 //
 func (this *Connection) handshake() error {
 
@@ -98,24 +99,27 @@ func (this *Connection) handshake() error {
 //
 func (this *Connection) handshakeClient() error {
 
-	// Send system.identify
+	// Send system.handshake
 
-	(&parser.SystemIdentify{
+	(&parser.SystemHandshake{
 		Version: YAMP_VERSION,
 	}).Serialize(this.conn)
 
 	// Get response
 
-	frame, _ := <-this.parser.Frames
+	frame, ok := <-this.parser.Frames
+	if !ok {
+		err := <-this.parser.Error
+		return err
+	}
 
-	// If got system.identify back, then we're ok
-	if frame.GetType() == parser.SYSTEM_IDENTIFY {
+	// If got system.handshake back, then we're ok
+	if frame.GetType() == parser.SYSTEM_HANDSHAKE {
 		return nil
 	}
 
 	// Something bad happened
 	if frame.GetType() == parser.SYSTEM_CLOSE {
-		log.Println(frame)
 		return errors.New(frame.(*parser.SystemClose).Reason)
 	}
 
@@ -127,26 +131,26 @@ func (this *Connection) handshakeClient() error {
 //
 func (this *Connection) handshakeServer() error {
 
-	// Wait for client to send system.identify
+	// Wait for client to send system.handshake
 
 	frame, ok := <-this.parser.Frames
 	if !ok {
-		<-this.parser.Error
-		return errors.New("Nothing")
+		err := <-this.parser.Error
+		return err
 	}
 
 	// If client sent something else, close connection
 
-	if frame.GetType() != parser.SYSTEM_IDENTIFY {
+	if frame.GetType() != parser.SYSTEM_HANDSHAKE {
 		this.conn.Close()
 		return errors.New("Unexpected frame")
 	}
 
 	// Check versions, and if we're satisfied
-	// respond with the same system.identify
+	// respond with the same system.handshake
 
-	identify := frame.(*parser.SystemIdentify)
-	if identify.Version != YAMP_VERSION {
+	handshake := frame.(*parser.SystemHandshake)
+	if handshake.Version != YAMP_VERSION {
 		this.conn.Close()
 		return errors.New("Version not supported")
 	}
@@ -227,7 +231,6 @@ func (this *Connection) SendEvent(uri string, body interface{}) {
 	}
 
 	this.framesOut <- &event
-
 }
 
 //
