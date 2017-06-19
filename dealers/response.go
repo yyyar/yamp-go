@@ -65,19 +65,22 @@ func (p *ResponseDealer) Loop() {
 			return
 		}
 
-		p.Lock()
-
+		p.RLock()
 		handler, ok := p.handlers[response.RequestUid]
+		p.RUnlock()
 
 		if !ok {
 			log.Println("No handlers for response uri ", response.RequestUid)
-			return
+			continue
 		}
 
-		delete(p.handlers, response.RequestUid)
+		if response.Type != parser.RESPONSE_PROGRESS {
+			p.Lock()
+			delete(p.handlers, response.RequestUid)
+			p.Unlock()
+		}
 
-		p.Unlock()
-
+		// TODO: possible problem
 		go handler(&api.Response{p.bodyFormat, nil, nil, &response})
 	}
 }

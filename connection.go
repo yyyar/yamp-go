@@ -6,6 +6,7 @@ package yamp
 
 import (
 	"errors"
+	"fmt"
 	"github.com/satori/go.uuid"
 	"github.com/yyyar/yamp-go/api"
 	"github.com/yyyar/yamp-go/dealers"
@@ -16,6 +17,8 @@ import (
 )
 
 const (
+
+	// Implemented Yamp Version
 	YAMP_VERSION = 0x01
 )
 
@@ -23,6 +26,8 @@ const (
 // events sending/handling and request/response
 // processing
 type Connection struct {
+
+	// Indicates party role
 	isClient bool
 
 	// Transport connection adapter
@@ -66,7 +71,6 @@ func NewConnection(isClient bool, conn transport.Connection, bodyFormat format.B
 
 	// Try handshake
 	if err := connection.handshake(); err != nil {
-
 		return nil, err
 	}
 
@@ -76,20 +80,20 @@ func NewConnection(isClient bool, conn transport.Connection, bodyFormat format.B
 //
 // Perform initial system.handshake
 //
-func (this *Connection) handshake() error {
+func (c *Connection) handshake() error {
 
-	if this.isClient {
-		if err := this.handshakeClient(); err != nil {
+	if c.isClient {
+		if err := c.handshakeClient(); err != nil {
 			return err
 		}
 	} else {
-		if err := this.handshakeServer(); err != nil {
+		if err := c.handshakeServer(); err != nil {
 			return err
 		}
 	}
 
-	go this.readLoop()
-	go this.writeLoop()
+	go c.readLoop()
+	go c.writeLoop()
 
 	return nil
 }
@@ -97,19 +101,19 @@ func (this *Connection) handshake() error {
 //
 // Initiate client-side handshake with server
 //
-func (this *Connection) handshakeClient() error {
+func (c *Connection) handshakeClient() error {
 
 	// Send system.handshake
 
 	(&parser.SystemHandshake{
 		Version: YAMP_VERSION,
-	}).Serialize(this.conn)
+	}).Serialize(c.conn)
 
 	// Get response
 
-	frame, ok := <-this.parser.Frames
+	frame, ok := <-c.parser.Frames
 	if !ok {
-		err := <-this.parser.Error
+		err := <-c.parser.Error
 		return err
 	}
 
@@ -123,26 +127,29 @@ func (this *Connection) handshakeClient() error {
 		return errors.New(frame.(*parser.SystemClose).Message)
 	}
 
+	// Got unexpected message, close drop connection
+
+	c.conn.Close()
 	return errors.New("Unexpected event")
 }
 
 //
 // Handle server party handshake
 //
-func (this *Connection) handshakeServer() error {
+func (c *Connection) handshakeServer() error {
 
 	// Wait for client to send system.handshake
 
-	frame, ok := <-this.parser.Frames
+	frame, ok := <-c.parser.Frames
 	if !ok {
-		err := <-this.parser.Error
+		err := <-c.parser.Error
 		return err
 	}
 
 	// If client sent something else, close connection
 
 	if frame.GetType() != parser.SYSTEM_HANDSHAKE {
-		this.conn.Close()
+		c.conn.Close()
 		return errors.New("Unexpected frame")
 	}
 
@@ -151,11 +158,11 @@ func (this *Connection) handshakeServer() error {
 
 	handshake := frame.(*parser.SystemHandshake)
 	if handshake.Version != YAMP_VERSION {
-		this.conn.Close()
-		return errors.New("Version not supported")
+		c.closeWithCode(parser.CLOSE_VERSION_NOT_SUPPORTED, "")
+		return errors.New(fmt.Sprintf("Version not supported, client was with version %d", handshake.Version))
 	}
 
-	frame.Serialize(this.conn)
+	frame.Serialize(c.conn)
 
 	return nil
 }
@@ -163,17 +170,17 @@ func (this *Connection) handshakeServer() error {
 //
 // Serializing loop
 //
-func (this *Connection) writeLoop() {
+func (c *Connection) writeLoop() {
 
 	for {
 
-		frame, ok := <-this.framesOut
+		frame, ok := <-c.framesOut
 
 		if !ok {
 			return
 		}
 
-		frame.Serialize(this.conn)
+		frame.Serialize(c.conn)
 	}
 
 }
@@ -181,44 +188,89 @@ func (this *Connection) writeLoop() {
 //
 // Parsing loop
 //
-func (this *Connection) readLoop() {
+func (c *Connection) readLoop() {
 
 	for {
-		select {
 
+		//
 		// Got new parsed frame
-		case frame, ok := <-this.parser.Frames:
+		//
+		frame, ok := <-c.parser.Frames
 
-			if !ok {
-				log.Println(<-this.parser.Error)
-				return
+		if !ok {
+			log.Println(<-c.parser.Error)
+			return
+		}
+
+		//
+		// Dispatch new frame
+		//
+		switch frame.GetType() {
+
+		case parser.SYSTEM_CLOSE:
+
+			close := frame.(*parser.SystemClose)
+			log.Println(close.Code, close.Message)
+
+		case parser.SYSTEM_PING:
+
+			ping := frame.(*parser.SystemPing)
+
+			// TODO:got response on our ping request
+			// since we do not send it now, we don't need to
+			// handle it either
+			if ping.Ack {
+				continue
 			}
 
-			// Dispatch new frame
-			switch frame.GetType() {
-			case parser.EVENT:
-				this.EventDealer.In <- *(frame).(*parser.Event)
-			case parser.RESPONSE:
-				this.ResponseDealer.In <- *(frame).(*parser.Response)
-			case parser.REQUEST:
-				this.RequestDealer.In <- *(frame).(*parser.Request)
-			default:
-				log.Println("Unhandled frame", frame.GetType(), frame)
-
+			// Respond with ping ack
+			c.framesOut <- &parser.SystemPing{
+				Ack:     true,
+				Payload: ping.Payload,
 			}
+
+		case parser.EVENT:
+			c.EventDealer.In <- *(frame).(*parser.Event)
+
+		case parser.RESPONSE:
+			c.ResponseDealer.In <- *(frame).(*parser.Response)
+
+		case parser.REQUEST:
+			c.RequestDealer.In <- *(frame).(*parser.Request)
+
+		default:
+			log.Println("Unhandled frame", frame.GetType(), frame)
+
 		}
 
 	}
 
 }
 
+func (c *Connection) closeWithCode(code parser.CloseCode, message string) {
+
+	c.framesOut <- &parser.SystemClose{
+		Code:    code,
+		Message: message,
+	}
+
+	c.conn.Close()
+}
+
+//
+// Drop connection and send close frame
+//
+func (c *Connection) Close(message string) {
+	c.closeWithCode(parser.CLOSE_UNKNOWN, message)
+}
+
 //
 // SendEvent
 //
-func (this *Connection) SendEvent(uri string, body interface{}) {
+func (c *Connection) SendEvent(uri string, body interface{}) {
 
 	uid := uuid.NewV1()
-	b, _ := this.bodyFormat.Serialize(body)
+	b, _ := c.bodyFormat.Serialize(body)
 
 	event := parser.Event{
 		UserHeader: parser.UserHeader{
@@ -230,36 +282,29 @@ func (this *Connection) SendEvent(uri string, body interface{}) {
 		},
 	}
 
-	this.framesOut <- &event
+	c.framesOut <- &event
 }
 
 //
 // SendRequest
 //
-func (this *Connection) SendRequest(uri string, body interface{}, handler api.ResponseHandler) {
+func (c *Connection) SendRequest(uri string, body interface{}, handler api.ResponseHandler) {
 
 	uid := uuid.NewV1()
-	b, _ := this.bodyFormat.Serialize(body)
+	b, _ := c.bodyFormat.Serialize(body)
 
 	request := parser.Request{
 		UserHeader: parser.UserHeader{
 			Uid: uid,
 			Uri: uri,
 		},
-		Progressive: false,
+		Progressive: true,
 		UserBody: parser.UserBody{
 			Body: b,
 		},
 	}
 
-	this.OnResponse(uid, handler)
+	c.OnResponse(uid, handler)
 
-	this.framesOut <- &request
-}
-
-//
-// Drop connection instantly
-//
-func (this *Connection) Destroy() {
-	this.conn.Close()
+	c.framesOut <- &request
 }

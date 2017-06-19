@@ -77,7 +77,7 @@ func (p *RequestDealer) Loop() {
 
 		if !ok {
 			log.Println("No handlers for request uri " + request.Uri)
-			return
+			continue
 		}
 
 		go handler(&api.Request{

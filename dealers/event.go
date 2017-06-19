@@ -72,7 +72,7 @@ func (e *EventDealer) Loop() {
 
 		if !ok {
 			log.Println("No handlers for event uri " + event.Uri)
-			return
+			continue
 		}
 
 		for _, handler := range handlers {

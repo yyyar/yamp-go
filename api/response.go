@@ -62,6 +62,13 @@ func (r *Response) Read(to interface{}) {
 }
 
 //
+// IsDone indicates that this is successed response
+//
+func (r *Response) IsDone() bool {
+	return r.Frame.Type == parser.RESPONSE_DONE
+}
+
+//
 // IsError indicates that this is errored response
 //
 func (r *Response) IsError() bool {
@@ -69,10 +76,10 @@ func (r *Response) IsError() bool {
 }
 
 //
-// IsDone indicates that this is successed response
+// IsProgress indicates progressive response
 //
-func (r *Response) IsDone() bool {
-	return r.Frame.Type == parser.RESPONSE_DONE
+func (r *Response) IsProgress() bool {
+	return r.Frame.Type == parser.RESPONSE_PROGRESS
 }
 
 //
@@ -87,6 +94,13 @@ func (r *Response) Done(obj interface{}) {
 //
 func (r *Response) Error(obj interface{}) {
 	r.send(parser.RESPONSE_ERROR, obj)
+}
+
+//
+// Progress sends done response to requester party
+//
+func (r *Response) Progress(obj interface{}) {
+	r.send(parser.RESPONSE_PROGRESS, obj)
 }
 
 //
