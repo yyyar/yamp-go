@@ -9,12 +9,13 @@ import (
 	"io"
 )
 
-const SYSTEM_PING FrameType = 0x01
+const SYSTEM_PING FrameType = 0x02
 
 //
 // SystemPing frame
 //
 type SystemPing struct {
+	Ack     bool
 	Payload string
 }
 
@@ -23,6 +24,11 @@ func (this *SystemPing) GetType() FrameType {
 }
 
 func (this *SystemPing) Parse(buffer io.Reader) error {
+
+	// ack
+	if err := utils.Parse(buffer, &this.Ack); err != nil {
+		return err
+	}
 
 	// size of Payload
 	var size uint8
@@ -44,6 +50,7 @@ func (this *SystemPing) Serialize(writer io.Writer) error {
 
 	utils.Serialize(writer, this.GetType())
 
+	utils.Serialize(writer, this.Ack)
 	utils.Serialize(writer, uint8(len(this.Payload)))
 	utils.Serialize(writer, []byte(this.Payload))
 

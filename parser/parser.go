@@ -20,9 +20,8 @@ var framesFactory = map[FrameType](func() Frame){}
 func init() {
 	framesFactory[SYSTEM_HANDSHAKE] = (func() Frame { return &SystemHandshake{} })
 	framesFactory[SYSTEM_PING] = (func() Frame { return &SystemPing{} })
-	framesFactory[SYSTEM_PONG] = (func() Frame { return &SystemPong{} })
 	framesFactory[SYSTEM_CLOSE] = (func() Frame { return &SystemClose{} })
-	framesFactory[SYSTEM_CLOSE_REDIRECT] = (func() Frame { return &SystemCloseRedirect{} })
+
 	framesFactory[EVENT] = (func() Frame { return &Event{} })
 	framesFactory[REQUEST] = (func() Frame { return &Request{} })
 	framesFactory[CANCEL] = (func() Frame { return &Cancel{} })

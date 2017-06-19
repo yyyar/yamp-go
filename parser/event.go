@@ -9,7 +9,7 @@ import (
 	"io"
 )
 
-const EVENT FrameType = 0x05
+const EVENT FrameType = 0x10
 
 //
 // Event frame

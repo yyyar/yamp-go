@@ -120,7 +120,7 @@ func (this *Connection) handshakeClient() error {
 
 	// Something bad happened
 	if frame.GetType() == parser.SYSTEM_CLOSE {
-		return errors.New(frame.(*parser.SystemClose).Reason)
+		return errors.New(frame.(*parser.SystemClose).Message)
 	}
 
 	return errors.New("Unexpected event")

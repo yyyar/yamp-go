@@ -9,7 +9,7 @@ import (
 	"io"
 )
 
-const REQUEST FrameType = 0x06
+const REQUEST FrameType = 0x11
 
 //
 // Request frame

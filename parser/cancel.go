@@ -9,7 +9,7 @@ import (
 	"io"
 )
 
-const CANCEL FrameType = 0x07
+const CANCEL FrameType = 0x12
 
 //
 // Cancel frame
@@ -17,7 +17,6 @@ const CANCEL FrameType = 0x07
 type Cancel struct {
 	UserHeader
 	RequestUid [16]byte
-	Kill       bool
 }
 
 func (this Cancel) GetType() FrameType {
@@ -38,11 +37,6 @@ func (this *Cancel) Parse(buffer io.Reader) error {
 		return err
 	}
 
-	// Kill
-	if err := utils.Parse(buffer, &this.Kill); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -52,7 +46,6 @@ func (this *Cancel) Serialize(writer io.Writer) error {
 
 	WriteUserHeader(writer, this.UserHeader)
 	utils.Serialize(writer, this.RequestUid)
-	utils.Serialize(writer, this.Kill)
 
 	return nil
 }

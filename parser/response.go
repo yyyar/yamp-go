@@ -9,7 +9,7 @@ import (
 	"io"
 )
 
-const RESPONSE FrameType = 0x08
+const RESPONSE FrameType = 0x13
 
 type ResponseType uint8
 
