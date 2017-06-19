@@ -298,7 +298,6 @@ func (c *Connection) SendRequest(uri string, body interface{}, handler api.Respo
 			Uid: uid,
 			Uri: uri,
 		},
-		Progressive: true,
 		UserBody: parser.UserBody{
 			Body: b,
 		},

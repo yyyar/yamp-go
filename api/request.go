@@ -47,10 +47,3 @@ func (r *Request) Read(to interface{}) {
 func (r *Request) RawBody() []byte {
 	return r.Frame.Body
 }
-
-//
-// Progressive indicates request of progressive responses
-//
-func (r *Request) Progessive() bool {
-	return r.Frame.Progressive
-}
